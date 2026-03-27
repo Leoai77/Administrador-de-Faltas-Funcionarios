@@ -1,0 +1,67 @@
+{
+  "entities": {
+    "Employee": {
+      "title": "Employee",
+      "description": "A worker in the construction company.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "description": "Full name of the employee" },
+        "status": { "type": "string", "enum": ["active", "away"], "description": "Current work status" }
+      },
+      "required": ["name", "status"]
+    },
+    "ConstructionSite": {
+      "title": "Construction Site",
+      "description": "A location where construction is happening.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "description": "Name of the site" },
+        "location": { "type": "string", "description": "Physical address or coordinates" },
+        "contractNumber": { "type": "string", "description": "Contract identification number" }
+      },
+      "required": ["name"]
+    },
+    "Allocation": {
+      "title": "Allocation",
+      "description": "Assignment of an employee to a site.",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "siteId": { "type": "string" }
+      },
+      "required": ["employeeId", "siteId"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Daily attendance record for an employee at a site.",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "siteId": { "type": "string" },
+        "date": { "type": "string", "format": "date", "description": "YYYY-MM-DD" },
+        "status": { "type": "string", "enum": ["present", "absent", "away"] }
+      },
+      "required": ["employeeId", "siteId", "date", "status"]
+    }
+  },
+  "firestore": {
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Collection of all employees."
+    },
+    "/sites/{siteId}": {
+      "schema": "ConstructionSite",
+      "description": "Collection of all construction sites."
+    },
+    "/allocations/{employeeId}": {
+      "schema": "Allocation",
+      "description": "Current site allocation for each employee."
+    },
+    "/attendance/{attendanceId}": {
+      "schema": "Attendance",
+      "description": "Daily attendance records."
+    }
+  }
+}

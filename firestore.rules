@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: employees
+    // Fields:
+    //   - name: string (required)
+    //   - status: string (required, 'active' | 'away')
+    //
+    // Collection: sites
+    // Fields:
+    //   - name: string (required)
+    //   - location: string (optional)
+    //   - contractNumber: string (optional)
+    //
+    // Collection: allocations
+    // Fields:
+    //   - employeeId: string (required)
+    //   - siteId: string (required)
+    //
+    // Collection: attendance
+    // Fields:
+    //   - employeeId: string (required)
+    //   - siteId: string (required)
+    //   - date: string (required, YYYY-MM-DD)
+    //   - status: string (required, 'present' | 'absent' | 'away')
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == "leocontanova7@gmail.com"
+      );
+    }
+
+    // Validation Functions
+    function isValidEmployee(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.status in ['active', 'away'];
+    }
+
+    function isValidSite(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             (!('location' in data) || (data.location is string && data.location.size() < 200)) &&
+             (!('contractNumber' in data) || (data.contractNumber is string && data.contractNumber.size() < 50)) &&
+             (!('createdAt' in data) || (data.createdAt is string));
+    }
+
+    function isValidAllocation(data) {
+      return data.employeeId is string && data.siteId is string;
+    }
+
+    function isValidAttendance(data) {
+      return data.employeeId is string && data.siteId is string &&
+             data.date is string && data.date.matches("^\\d{4}-\\d{2}-\\d{2}$") &&
+             data.status in ['present', 'absent', 'away'];
+    }
+
+    // Rules
+    match /employees/{employeeId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidEmployee(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /sites/{siteId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidSite(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /allocations/{employeeId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidAllocation(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidAttendance(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}

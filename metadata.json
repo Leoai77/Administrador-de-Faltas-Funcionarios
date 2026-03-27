@@ -1,0 +1,5 @@
+{
+  "name": "Controle de Faltas e Locação de Funcionários",
+  "description": "Aplicativo para gerenciar presença, faltas e alocação de funcionários em obras, com exportação de dados.",
+  "requestFramePermissions": []
+}
