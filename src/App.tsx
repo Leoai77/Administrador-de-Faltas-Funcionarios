@@ -1160,64 +1160,102 @@ function ReportsView({ employees, sites, attendance }: {
     const filename = `relatorio_faltas_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
 
     try {
+      console.log('Iniciando exportação Excel...');
       const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const file = new File([blob], filename, { type: blob.type });
 
+      let shared = false;
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Relatório Excel',
-        });
-      } else {
-        // Fallback para navegadores normais
-        XLSX.writeFile(wb, filename);
+        try {
+          console.log('Tentando compartilhar via Web Share API...');
+          await navigator.share({
+            files: [file],
+            title: 'Relatório Excel',
+          });
+          shared = true;
+          console.log('Compartilhamento concluído com sucesso.');
+        } catch (shareErr: any) {
+          console.warn('Erro ao compartilhar Excel (tentando download):', shareErr);
+        }
+      }
+
+      if (!shared) {
+        console.log('Usando fallback de download direto...');
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        console.log('Download iniciado.');
       }
     } catch (err) {
-      console.error('Erro ao compartilhar Excel:', err);
-      alert('Erro ao exportar. O seu aplicativo (APK) bloqueou a ação.');
+      console.error('Erro ao exportar Excel:', err);
+      alert('Erro ao exportar Excel. Verifique as permissões do aplicativo.');
     }
   };
 
   const exportPDF = async () => {
-    const doc = new jsPDF();
-    doc.text('Relatório de Faltas e Presença', 14, 15);
-    doc.setFontSize(10);
-    doc.text(`Período: ${format(parseISO(startDate), 'dd/MM/yyyy')} a ${format(parseISO(endDate), 'dd/MM/yyyy')}`, 14, 22);
-    
-    const tableData = reportData.map(row => [
-      row.name,
-      row.site,
-      row.presence,
-      `${row.absences}${row.absenceDates.length > 0 ? '\n(' + row.absenceDates.map(d => format(parseISO(d), 'dd/MM')).join(', ') + ')' : ''}`,
-      row.away,
-      row.total
-    ]);
-
-    autoTable(doc, {
-      head: [['Funcionário', 'Obra', 'Pres.', 'Faltas', 'Afast.', 'Total']],
-      body: tableData,
-      startY: 30,
-    });
-
-    const filename = `relatorio_faltas_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-
     try {
+      console.log('Iniciando exportação PDF...');
+      const doc = new jsPDF();
+      doc.text('Relatório de Faltas e Presença', 14, 15);
+      doc.setFontSize(10);
+      doc.text(`Período: ${format(parseISO(startDate), 'dd/MM/yyyy')} a ${format(parseISO(endDate), 'dd/MM/yyyy')}`, 14, 22);
+      
+      const tableData = reportData.map(row => [
+        row.name,
+        row.site,
+        row.presence,
+        `${row.absences}${row.absenceDates.length > 0 ? '\n(' + row.absenceDates.map(d => format(parseISO(d), 'dd/MM')).join(', ') + ')' : ''}`,
+        row.away,
+        row.total
+      ]);
+
+      autoTable(doc, {
+        head: [['Funcionário', 'Obra', 'Pres.', 'Faltas', 'Afast.', 'Total']],
+        body: tableData,
+        startY: 30,
+      });
+
+      const filename = `relatorio_faltas_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+
       const blob = doc.output('blob');
       const file = new File([blob], filename, { type: 'application/pdf' });
 
+      let shared = false;
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Relatório PDF',
-        });
-      } else {
-        // Fallback para navegadores normais
-        doc.save(filename);
+        try {
+          console.log('Tentando compartilhar PDF via Web Share API...');
+          await navigator.share({
+            files: [file],
+            title: 'Relatório PDF',
+          });
+          shared = true;
+          console.log('Compartilhamento concluído com sucesso.');
+        } catch (shareErr: any) {
+          console.warn('Erro ao compartilhar PDF (tentando download):', shareErr);
+        }
+      }
+
+      if (!shared) {
+        console.log('Usando fallback de download direto...');
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        console.log('Download iniciado.');
       }
     } catch (err) {
-      console.error('Erro ao compartilhar PDF:', err);
-      alert('Erro ao exportar. O seu aplicativo (APK) bloqueou a ação.');
+      console.error('Erro ao exportar PDF:', err);
+      alert('Erro ao exportar PDF. Verifique as permissões do aplicativo.');
     }
   };
 
