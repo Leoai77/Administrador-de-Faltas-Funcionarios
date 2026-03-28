@@ -1004,7 +1004,7 @@ function ReportsView({ employees, sites, attendance }: {
       .filter(row => row.total > 0);
   }, [employees, sites, attendance, startDate, endDate, siteFilter, employeeFilter]);
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     const data = reportData.map(row => ({
       'Funcionário': row.name,
       'Obra Principal': row.site,
@@ -1019,10 +1019,30 @@ function ReportsView({ employees, sites, attendance }: {
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
-    XLSX.writeFile(wb, `relatorio_faltas_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    
+    const filename = `relatorio_faltas_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+
+    try {
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const file = new File([blob], filename, { type: blob.type });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Relatório Excel',
+        });
+      } else {
+        XLSX.writeFile(wb, filename);
+      }
+    } catch (err) {
+      console.error('Erro ao compartilhar Excel:', err);
+      // Fallback
+      XLSX.writeFile(wb, filename);
+    }
   };
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
     const doc = new jsPDF();
     doc.text('Relatório de Faltas e Presença', 14, 15);
     doc.setFontSize(10);
@@ -1043,7 +1063,25 @@ function ReportsView({ employees, sites, attendance }: {
       startY: 30,
     });
 
-    doc.save(`relatorio_faltas_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    const filename = `relatorio_faltas_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+
+    try {
+      const blob = doc.output('blob');
+      const file = new File([blob], filename, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Relatório PDF',
+        });
+      } else {
+        doc.save(filename);
+      }
+    } catch (err) {
+      console.error('Erro ao compartilhar PDF:', err);
+      // Fallback
+      doc.save(filename);
+    }
   };
 
   return (
