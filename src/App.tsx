@@ -3,7 +3,8 @@ import {
   onAuthStateChanged, 
   signInWithPopup, 
   signOut, 
-  User 
+  User,
+  browserPopupRedirectResolver
 } from 'firebase/auth';
 import { 
   collection, 
@@ -242,20 +243,29 @@ export default function App() {
     };
   }, [user]);
 
+  const [loginError, setLoginError] = useState<string | null>(null);
+
   const handleLogin = async () => {
+    setLoginError(null);
     try {
       console.log('Iniciando login com Google...');
-      await signInWithPopup(auth, googleProvider);
+      await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
       console.log('Login realizado com sucesso!');
     } catch (error: any) {
       console.error('Erro detalhado de login:', error);
+      let msg = 'Erro ao entrar com Google. ';
+      
       if (error.code === 'auth/popup-blocked') {
-        alert('O popup de login foi bloqueado pelo navegador. Por favor, permita popups para este site.');
+        msg = 'O popup de login foi bloqueado pelo navegador. Por favor, permita popups para este site.';
       } else if (error.code === 'auth/unauthorized-domain') {
-        alert('Este domínio não está autorizado no Firebase Console. Por favor, adicione os domínios do AI Studio nas configurações de autenticação do Firebase.');
+        msg = `Este domínio (${window.location.hostname}) não está autorizado no Firebase. Adicione-o no Firebase Console > Authentication > Settings > Authorized Domains.`;
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        msg = 'O login foi cancelado porque a janela foi fechada.';
       } else {
-        alert('Erro ao entrar com Google: ' + (error.message || 'Erro desconhecido'));
+        msg += error.message || 'Erro desconhecido.';
       }
+      
+      setLoginError(msg);
     }
   };
 
@@ -292,6 +302,27 @@ export default function App() {
           </div>
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Controle de Obras</h1>
           <p className="text-slate-500 mb-8">Gerencie presença e alocação de funcionários de forma simples e eficiente.</p>
+          
+          {loginError && (
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-600 text-sm text-left flex flex-col gap-3">
+              <div className="flex gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <p>{loginError}</p>
+              </div>
+              {loginError.includes('não está autorizado') && (
+                <div className="mt-2 p-3 bg-white/50 rounded-lg border border-rose-200 text-rose-800 text-xs">
+                  <p className="font-bold mb-1">Como resolver:</p>
+                  <ol className="list-decimal ml-4 space-y-1">
+                    <li>Acesse o <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold">Console do Firebase</a></li>
+                    <li>Vá em <b>Authentication</b> &gt; <b>Settings</b> &gt; <b>Authorized Domains</b></li>
+                    <li>Adicione o domínio: <code className="bg-rose-100 px-1 rounded">{window.location.hostname}</code></li>
+                    <li>Tente logar novamente após alguns segundos.</li>
+                  </ol>
+                </div>
+              )}
+            </div>
+          )}
+
           <Button onClick={handleLogin} className="w-full py-4 text-lg">
             <LogIn className="w-5 h-5" />
             Entrar com Google
