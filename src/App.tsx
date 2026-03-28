@@ -263,21 +263,39 @@ export default function App() {
     try {
       console.log('Configurando persistência local...');
       await setPersistence(auth, browserLocalPersistence);
-      console.log('Iniciando login com Google (Redirect)...');
-      await signInWithRedirect(auth, googleProvider);
+      console.log('Iniciando login com Google (Popup)...');
+      await signInWithPopup(auth, googleProvider);
+      console.log('Login realizado com sucesso!');
     } catch (error: any) {
       console.error('Erro detalhado de login:', error);
       let msg = 'Erro ao entrar com Google. ';
       
-      if (error.code === 'auth/unauthorized-domain') {
+      if (error.code === 'auth/popup-blocked') {
+        msg = 'O popup de login foi bloqueado pelo navegador. Por favor, permita popups para este site.';
+      } else if (error.code === 'auth/unauthorized-domain') {
         msg = `Este domínio (${window.location.hostname}) não está autorizado no Firebase. Adicione-o no Firebase Console > Authentication > Settings > Authorized Domains.`;
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        msg = 'O login foi cancelado porque a janela foi fechada.';
       } else if (error.message && error.message.includes('missing initial state')) {
-        msg = 'O WebView bloqueou o login devido a configurações de armazenamento. Tente limpar o cache do aplicativo.';
+        msg = 'O navegador bloqueou o login devido a configurações de privacidade. Tente usar o botão "Entrar (Modo Celular/APK)".';
       } else {
         msg += error.message || 'Erro desconhecido.';
       }
       
       setLoginError(msg);
+    }
+  };
+
+  const handleLoginRedirect = async () => {
+    setLoginError(null);
+    try {
+      console.log('Configurando persistência local...');
+      await setPersistence(auth, browserLocalPersistence);
+      console.log('Iniciando login com Google (Redirect)...');
+      await signInWithRedirect(auth, googleProvider);
+    } catch (error: any) {
+      console.error('Erro detalhado de login (Redirect):', error);
+      setLoginError('Erro ao iniciar login por redirecionamento: ' + error.message);
     }
   };
 
@@ -345,10 +363,17 @@ export default function App() {
             </div>
           )}
 
-          <Button onClick={handleLogin} className="w-full py-4 text-lg">
-            <LogIn className="w-5 h-5" />
-            Entrar com Google
-          </Button>
+          <div className="flex flex-col gap-3">
+            <Button onClick={handleLogin} className="w-full py-4 text-lg">
+              <LogIn className="w-5 h-5" />
+              Entrar (Navegador)
+            </Button>
+            
+            <Button onClick={handleLoginRedirect} variant="outline" className="w-full py-4 text-lg">
+              <LogIn className="w-5 h-5" />
+              Entrar (Modo Celular/APK)
+            </Button>
+          </div>
         </Card>
       </div>
     );
