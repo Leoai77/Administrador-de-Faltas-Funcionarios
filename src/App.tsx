@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, Component } from 'react';
 import { 
   onAuthStateChanged, 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   signOut, 
   User
 } from 'firebase/auth';
@@ -192,6 +194,16 @@ export default function App() {
 
   // Auth Effect
   useEffect(() => {
+    // Check for redirect result first (for mobile fallback)
+    getRedirectResult(auth).then((result) => {
+      if (result) {
+        console.log('Login via redirect com sucesso!');
+      }
+    }).catch((error) => {
+      console.error('Erro no redirect:', error);
+      setLoginError('Erro ao retornar do login: ' + error.message);
+    });
+
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
@@ -270,6 +282,17 @@ export default function App() {
     }
   };
 
+  const handleLoginRedirect = async () => {
+    setLoginError(null);
+    try {
+      console.log('Iniciando login com Google (Redirect)...');
+      await signInWithRedirect(auth, googleProvider);
+    } catch (error: any) {
+      console.error('Erro detalhado de login (Redirect):', error);
+      setLoginError('Erro ao iniciar login por redirecionamento: ' + error.message);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -334,10 +357,17 @@ export default function App() {
             </div>
           )}
 
-          <Button onClick={handleLogin} className="w-full py-4 text-lg">
-            <LogIn className="w-5 h-5" />
-            Entrar com Google
-          </Button>
+          <div className="flex flex-col gap-3">
+            <Button onClick={handleLogin} className="w-full py-4 text-lg">
+              <LogIn className="w-5 h-5" />
+              Entrar com Google
+            </Button>
+            
+            <Button onClick={handleLoginRedirect} variant="outline" className="w-full py-4 text-lg">
+              <LogIn className="w-5 h-5" />
+              Entrar (Modo Celular)
+            </Button>
+          </div>
         </Card>
       </div>
     );
