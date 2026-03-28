@@ -1023,22 +1023,19 @@ function ReportsView({ employees, sites, attendance }: {
     const filename = `relatorio_faltas_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
 
     try {
-      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const file = new File([blob], filename, { type: blob.type });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Relatório Excel',
-        });
-      } else {
-        XLSX.writeFile(wb, filename);
-      }
+      // Gerar Base64 para maior compatibilidade com WebViews (APKs)
+      const base64 = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+      const dataUri = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + base64;
+      
+      const link = document.createElement('a');
+      link.href = dataUri;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } catch (err) {
-      console.error('Erro ao compartilhar Excel:', err);
-      // Fallback
-      XLSX.writeFile(wb, filename);
+      console.error('Erro ao exportar Excel:', err);
+      alert('Erro ao gerar o arquivo Excel. Tente novamente.');
     }
   };
 
@@ -1066,21 +1063,18 @@ function ReportsView({ employees, sites, attendance }: {
     const filename = `relatorio_faltas_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
 
     try {
-      const blob = doc.output('blob');
-      const file = new File([blob], filename, { type: 'application/pdf' });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'Relatório PDF',
-        });
-      } else {
-        doc.save(filename);
-      }
+      // Gerar Data URI (Base64) para maior compatibilidade com WebViews
+      const dataUri = doc.output('datauristring');
+      
+      const link = document.createElement('a');
+      link.href = dataUri;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } catch (err) {
-      console.error('Erro ao compartilhar PDF:', err);
-      // Fallback
-      doc.save(filename);
+      console.error('Erro ao exportar PDF:', err);
+      alert('Erro ao gerar o arquivo PDF. Tente novamente.');
     }
   };
 
