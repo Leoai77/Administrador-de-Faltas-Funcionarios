@@ -27,7 +27,8 @@ import {
   addDays,
   subDays,
   startOfDay,
-  isWithinInterval
+  isWithinInterval,
+  isWeekend
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -243,9 +244,18 @@ export default function App() {
 
   const handleLogin = async () => {
     try {
+      console.log('Iniciando login com Google...');
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error('Login error:', error);
+      console.log('Login realizado com sucesso!');
+    } catch (error: any) {
+      console.error('Erro detalhado de login:', error);
+      if (error.code === 'auth/popup-blocked') {
+        alert('O popup de login foi bloqueado pelo navegador. Por favor, permita popups para este site.');
+      } else if (error.code === 'auth/unauthorized-domain') {
+        alert('Este domínio não está autorizado no Firebase Console. Por favor, adicione os domínios do AI Studio nas configurações de autenticação do Firebase.');
+      } else {
+        alert('Erro ao entrar com Google: ' + (error.message || 'Erro desconhecido'));
+      }
     }
   };
 
@@ -449,8 +459,12 @@ function AttendanceView({ employees, sites, allocations, attendance }: {
     return employees.filter(e => allocatedEmployeeIds.includes(e.id));
   }, [employees, allocations, selectedSiteId]);
 
+  const isSelectedWeekend = useMemo(() => {
+    return isWeekend(parseISO(selectedDate));
+  }, [selectedDate]);
+
   const handleStatusChange = async (employeeId: string, status: AttendanceStatus) => {
-    if (!selectedSiteId) return;
+    if (!selectedSiteId || isSelectedWeekend) return;
     
     const recordId = `${employeeId}_${selectedDate}`;
     const existing = attendance.find(a => a.employeeId === employeeId && a.date === selectedDate);
@@ -515,6 +529,12 @@ function AttendanceView({ employees, sites, allocations, attendance }: {
         <Card className="flex flex-col items-center justify-center py-20 text-slate-400">
           <Building2 className="w-16 h-16 mb-4 opacity-20" />
           <p className="text-lg font-medium">Selecione uma obra para registrar a presença</p>
+        </Card>
+      ) : isSelectedWeekend ? (
+        <Card className="flex flex-col items-center justify-center py-20 text-amber-600 bg-amber-50 border-amber-100">
+          <Calendar className="w-16 h-16 mb-4 opacity-40" />
+          <p className="text-xl font-bold">Fim de Semana</p>
+          <p className="text-amber-700/70">Não há expediente aos sábados e domingos.</p>
         </Card>
       ) : filteredEmployees.length === 0 ? (
         <Card className="flex flex-col items-center justify-center py-20 text-slate-400">
