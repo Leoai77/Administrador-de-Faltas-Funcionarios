@@ -5,6 +5,7 @@ export interface Employee {
   id: string;
   name: string;
   status: EmployeeStatus;
+  photoBase64?: string;
 }
 
 export interface ConstructionSite {

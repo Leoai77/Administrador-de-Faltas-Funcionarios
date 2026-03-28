@@ -626,6 +626,7 @@ function AttendanceView({ employees, sites, allocations, attendance }: {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-6 py-4 text-sm font-bold text-slate-700 w-16">Foto</th>
                   <th className="px-6 py-4 text-sm font-bold text-slate-700">Funcionário</th>
                   <th className="px-6 py-4 text-sm font-bold text-slate-700 text-center">Presença</th>
                   <th className="px-6 py-4 text-sm font-bold text-slate-700 text-center">Falta</th>
@@ -635,6 +636,15 @@ function AttendanceView({ employees, sites, allocations, attendance }: {
               <tbody className="divide-y divide-slate-50">
                 {filteredEmployees.map((emp) => (
                   <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      {emp.photoBase64 ? (
+                        <img src={emp.photoBase64} alt={emp.name} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                          <Users className="w-5 h-5 text-slate-400" />
+                        </div>
+                      )}
+                    </td>
                     <td className="px-6 py-4">
                       <p className="font-semibold text-slate-900">{emp.name}</p>
                       <p className="text-xs text-slate-500 uppercase tracking-wider">{emp.status}</p>
@@ -714,16 +724,38 @@ function EmployeesView({ employees, sites, allocations }: {
   const [name, setName] = useState('');
   const [status, setStatus] = useState<EmployeeStatus>('active');
   const [siteId, setSiteId] = useState('');
+  const [photoBase64, setPhotoBase64] = useState<string>('');
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Limitar tamanho da imagem para evitar erros no Firestore (1MB max, mas vamos focar em imagens pequenas)
+      if (file.size > 500 * 1024) {
+        alert('A imagem é muito grande. Escolha uma foto com menos de 500KB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoBase64(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const docRef = await addDoc(collection(db, 'employees'), { name, status });
+      const docRef = await addDoc(collection(db, 'employees'), { 
+        name, 
+        status,
+        photoBase64: photoBase64 || null
+      });
       if (siteId) {
         await setDoc(doc(db, 'allocations', docRef.id), { employeeId: docRef.id, siteId });
       }
       setName('');
       setSiteId('');
+      setPhotoBase64('');
       setIsAdding(false);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'employees');
@@ -764,8 +796,19 @@ function EmployeesView({ employees, sites, allocations }: {
 
       {isAdding && (
         <Card>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <Input label="Nome Completo" value={name} onChange={setName} required />
+            
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-semibold text-slate-700">Foto (Opcional)</label>
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={handlePhotoChange}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
+              />
+            </div>
+
             <Select 
               label="Obra (Opcional)" 
               value={siteId} 
@@ -775,9 +818,18 @@ function EmployeesView({ employees, sites, allocations }: {
             />
             <div className="flex gap-2">
               <Button type="submit" className="flex-1">Salvar</Button>
-              <Button variant="ghost" onClick={() => setIsAdding(false)}>Cancelar</Button>
+              <Button variant="ghost" onClick={() => {
+                setIsAdding(false);
+                setPhotoBase64('');
+              }}>Cancelar</Button>
             </div>
           </form>
+          {photoBase64 && (
+            <div className="mt-4">
+              <p className="text-xs text-slate-500 mb-2">Pré-visualização da foto:</p>
+              <img src={photoBase64} alt="Preview" className="w-16 h-16 rounded-full object-cover border border-slate-200" />
+            </div>
+          )}
         </Card>
       )}
 
@@ -786,6 +838,7 @@ function EmployeesView({ employees, sites, allocations }: {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
+                <th className="px-6 py-4 text-sm font-bold text-slate-700 w-16">Foto</th>
                 <th className="px-6 py-4 text-sm font-bold text-slate-700">Nome</th>
                 <th className="px-6 py-4 text-sm font-bold text-slate-700">Status</th>
                 <th className="px-6 py-4 text-sm font-bold text-slate-700">Obra Alocada</th>
@@ -795,6 +848,15 @@ function EmployeesView({ employees, sites, allocations }: {
             <tbody className="divide-y divide-slate-50">
               {employees.map((emp) => (
                 <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    {emp.photoBase64 ? (
+                      <img src={emp.photoBase64} alt={emp.name} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                        <Users className="w-5 h-5 text-slate-400" />
+                      </div>
+                    )}
+                  </td>
                   <td className="px-6 py-4 font-semibold text-slate-900">{emp.name}</td>
                   <td className="px-6 py-4">
                     <span className={cn(
@@ -1018,6 +1080,7 @@ function ReportsView({ employees, sites, attendance }: {
         return {
           id: emp.id,
           name: emp.name,
+          photoBase64: emp.photoBase64,
           site: mainSiteName,
           absences,
           absenceDates,
@@ -1151,6 +1214,7 @@ function ReportsView({ employees, sites, attendance }: {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
+                <th className="px-6 py-4 text-sm font-bold text-slate-700 w-16">Foto</th>
                 <th className="px-6 py-4 text-sm font-bold text-slate-700">Funcionário</th>
                 <th className="px-6 py-4 text-sm font-bold text-slate-700">Obra Principal</th>
                 <th className="px-6 py-4 text-sm font-bold text-slate-700 text-center">Presenças</th>
@@ -1162,6 +1226,15 @@ function ReportsView({ employees, sites, attendance }: {
             <tbody className="divide-y divide-slate-50">
               {reportData.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    {row.photoBase64 ? (
+                      <img src={row.photoBase64} alt={row.name} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                        <Users className="w-5 h-5 text-slate-400" />
+                      </div>
+                    )}
+                  </td>
                   <td className="px-6 py-4 font-semibold text-slate-900">{row.name}</td>
                   <td className="px-6 py-4 text-slate-500">{row.site}</td>
                   <td className="px-6 py-4 text-center text-emerald-600 font-bold">{row.presence}</td>
