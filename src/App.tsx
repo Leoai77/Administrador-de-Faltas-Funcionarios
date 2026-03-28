@@ -51,7 +51,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -964,7 +964,7 @@ function ReportsView({ employees, sites, attendance }: {
       row.total
     ]);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [['Funcionário', 'Obra', 'Pres.', 'Faltas', 'Afast.', 'Total']],
       body: tableData,
       startY: 30,
