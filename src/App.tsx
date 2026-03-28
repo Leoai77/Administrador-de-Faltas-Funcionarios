@@ -52,7 +52,8 @@ import {
   Filter,
   FileSpreadsheet,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  Pencil
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -721,6 +722,7 @@ function EmployeesView({ employees, sites, allocations }: {
   allocations: Allocation[]; 
 }) {
   const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [status, setStatus] = useState<EmployeeStatus>('active');
   const [siteId, setSiteId] = useState('');
@@ -729,7 +731,6 @@ function EmployeesView({ employees, sites, allocations }: {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Limitar tamanho da imagem para evitar erros no Firestore (1MB max, mas vamos focar em imagens pequenas)
       if (file.size > 500 * 1024) {
         alert('A imagem é muito grande. Escolha uma foto com menos de 500KB.');
         return;
@@ -742,23 +743,53 @@ function EmployeesView({ employees, sites, allocations }: {
     }
   };
 
+  const resetForm = () => {
+    setIsAdding(false);
+    setEditingId(null);
+    setName('');
+    setStatus('active');
+    setSiteId('');
+    setPhotoBase64('');
+  };
+
+  const handleEdit = (emp: Employee) => {
+    setEditingId(emp.id);
+    setName(emp.name);
+    setStatus(emp.status);
+    setPhotoBase64(emp.photoBase64 || '');
+    setSiteId(allocations.find(a => a.employeeId === emp.id)?.siteId || '');
+    setIsAdding(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const docRef = await addDoc(collection(db, 'employees'), { 
-        name, 
-        status,
-        photoBase64: photoBase64 || null
-      });
-      if (siteId) {
-        await setDoc(doc(db, 'allocations', docRef.id), { employeeId: docRef.id, siteId });
+      if (editingId) {
+        await updateDoc(doc(db, 'employees', editingId), { 
+          name, 
+          status,
+          photoBase64: photoBase64 || null
+        });
+        
+        if (siteId) {
+          await setDoc(doc(db, 'allocations', editingId), { employeeId: editingId, siteId });
+        } else {
+          await deleteDoc(doc(db, 'allocations', editingId));
+        }
+      } else {
+        const docRef = await addDoc(collection(db, 'employees'), { 
+          name, 
+          status,
+          photoBase64: photoBase64 || null
+        });
+        if (siteId) {
+          await setDoc(doc(db, 'allocations', docRef.id), { employeeId: docRef.id, siteId });
+        }
       }
-      setName('');
-      setSiteId('');
-      setPhotoBase64('');
-      setIsAdding(false);
+      resetForm();
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'employees');
+      handleFirestoreError(err, editingId ? OperationType.UPDATE : OperationType.CREATE, 'employees');
     }
   };
 
@@ -788,7 +819,13 @@ function EmployeesView({ employees, sites, allocations }: {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-900">Funcionários</h2>
-        <Button onClick={() => setIsAdding(!isAdding)}>
+        <Button onClick={() => {
+          if (isAdding) {
+            resetForm();
+          } else {
+            setIsAdding(true);
+          }
+        }}>
           <Plus className="w-4 h-4" />
           {isAdding ? 'Cancelar' : 'Novo Funcionário'}
         </Button>
@@ -796,6 +833,11 @@ function EmployeesView({ employees, sites, allocations }: {
 
       {isAdding && (
         <Card>
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-slate-800">
+              {editingId ? 'Editar Funcionário' : 'Cadastrar Novo Funcionário'}
+            </h3>
+          </div>
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <Input label="Nome Completo" value={name} onChange={setName} required />
             
@@ -818,10 +860,7 @@ function EmployeesView({ employees, sites, allocations }: {
             />
             <div className="flex gap-2">
               <Button type="submit" className="flex-1">Salvar</Button>
-              <Button variant="ghost" onClick={() => {
-                setIsAdding(false);
-                setPhotoBase64('');
-              }}>Cancelar</Button>
+              <Button variant="ghost" onClick={resetForm}>Cancelar</Button>
             </div>
           </form>
           {photoBase64 && (
@@ -879,12 +918,22 @@ function EmployeesView({ employees, sites, allocations }: {
                     </select>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => handleDelete(emp.id)}
-                      className="p-2 text-slate-300 hover:text-rose-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={() => handleEdit(emp)}
+                        className="p-2 text-slate-400 hover:text-emerald-600 transition-colors"
+                        title="Editar"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(emp.id)}
+                        className="p-2 text-slate-400 hover:text-rose-600 transition-colors"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
