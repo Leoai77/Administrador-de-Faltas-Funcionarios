@@ -3,8 +3,7 @@ import {
   onAuthStateChanged, 
   signInWithPopup, 
   signOut, 
-  User,
-  browserPopupRedirectResolver
+  User
 } from 'firebase/auth';
 import { 
   collection, 
@@ -249,7 +248,7 @@ export default function App() {
     setLoginError(null);
     try {
       console.log('Iniciando login com Google...');
-      await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
+      await signInWithPopup(auth, googleProvider);
       console.log('Login realizado com sucesso!');
     } catch (error: any) {
       console.error('Erro detalhado de login:', error);
@@ -261,6 +260,8 @@ export default function App() {
         msg = `Este domínio (${window.location.hostname}) não está autorizado no Firebase. Adicione-o no Firebase Console > Authentication > Settings > Authorized Domains.`;
       } else if (error.code === 'auth/popup-closed-by-user') {
         msg = 'O login foi cancelado porque a janela foi fechada.';
+      } else if (error.message && error.message.includes('missing initial state')) {
+        msg = 'O navegador bloqueou o login devido a configurações de privacidade (cookies de terceiros bloqueados). Tente usar uma aba normal (não anônima) ou desative o bloqueio de rastreamento (ex: Safari, Brave).';
       } else {
         msg += error.message || 'Erro desconhecido.';
       }
@@ -318,6 +319,16 @@ export default function App() {
                     <li>Adicione o domínio: <code className="bg-rose-100 px-1 rounded">{window.location.hostname}</code></li>
                     <li>Tente logar novamente após alguns segundos.</li>
                   </ol>
+                </div>
+              )}
+              {loginError.includes('cookies de terceiros') && (
+                <div className="mt-2 p-3 bg-white/50 rounded-lg border border-rose-200 text-rose-800 text-xs">
+                  <p className="font-bold mb-1">Como resolver no seu navegador:</p>
+                  <ul className="list-disc ml-4 space-y-1">
+                    <li><b>Chrome/Edge:</b> Não use aba anônima ou permita cookies de terceiros nas configurações.</li>
+                    <li><b>Safari:</b> Vá em Preferências &gt; Privacidade e desmarque "Impedir rastreamento entre sites".</li>
+                    <li><b>Brave:</b> Desative os "Escudos" (Shields) para este site clicando no ícone do leão na barra de endereços.</li>
+                  </ul>
                 </div>
               )}
             </div>
