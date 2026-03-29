@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, indexedDBLocalPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, onSnapshot, updateDoc, deleteDoc, getDocFromServer, Timestamp } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -10,6 +10,12 @@ if (!firebaseConfig || !firebaseConfig.projectId || firebaseConfig.projectId ===
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+
+// Try to set persistence to indexedDB (more robust for WebViews)
+setPersistence(auth, indexedDBLocalPersistence)
+  .catch(() => setPersistence(auth, browserLocalPersistence))
+  .catch(() => console.warn('Não foi possível definir persistência de auth.'));
+
 export const googleProvider = new GoogleAuthProvider();
 
 export enum OperationType {

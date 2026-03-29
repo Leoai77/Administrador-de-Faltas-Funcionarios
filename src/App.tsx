@@ -7,7 +7,9 @@ import {
   signOut, 
   User,
   setPersistence,
-  browserLocalPersistence
+  browserLocalPersistence,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword
 } from 'firebase/auth';
 import { 
   collection, 
@@ -53,7 +55,9 @@ import {
   FileSpreadsheet,
   FileText,
   AlertTriangle,
-  Pencil
+  Pencil,
+  Mail,
+  Share2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -281,6 +285,40 @@ export default function App() {
 
   const [loginError, setLoginError] = useState<string | null>(null);
 
+  const [showEmailLogin, setShowEmailLogin] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    setAuthLoading(true);
+    try {
+      console.log('Tentando login com e-mail:', email);
+      await signInWithEmailAndPassword(auth, email, password);
+      console.log('Login com e-mail realizado com sucesso!');
+    } catch (error: any) {
+      console.error('Erro no login com e-mail:', error);
+      if (error.code === 'auth/user-not-found') {
+        // Try to create account if it doesn't exist (simple onboarding)
+        try {
+          console.log('Usuário não encontrado, tentando criar conta...');
+          await createUserWithEmailAndPassword(auth, email, password);
+          console.log('Conta criada com sucesso!');
+        } catch (createError: any) {
+          setLoginError('Erro ao criar conta: ' + createError.message);
+        }
+      } else if (error.code === 'auth/wrong-password') {
+        setLoginError('Senha incorreta.');
+      } else {
+        setLoginError('Erro no login: ' + error.message);
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const handleLogin = async () => {
     setLoginError(null);
     try {
@@ -300,13 +338,25 @@ export default function App() {
         msg = 'O login foi cancelado porque a janela foi fechada.';
       } else if (error.code === 'auth/cancelled-popup-request') {
         msg = 'Uma solicitação de login já está em andamento.';
-      } else if (error.message && error.message.includes('missing initial state')) {
-        msg = 'O navegador bloqueou o login devido a configurações de privacidade. Tente usar o botão "Entrar (Modo Celular/APK)".';
+      } else if (error.message && (error.message.includes('missing initial state') || error.code === 'auth/internal-error')) {
+        msg = 'Erro de estado inicial (Cookies/Privacidade). O seu navegador está bloqueando o login. Tente limpar o cache ou usar o "Modo Celular/APK" abaixo.';
       } else {
         msg += error.message || 'Erro desconhecido.';
       }
       
       setLoginError(msg);
+    }
+  };
+
+  const handleClearAndLogin = async () => {
+    setLoginError(null);
+    try {
+      console.log('Limpando dados de sessão e tentando novamente...');
+      window.sessionStorage.clear();
+      window.localStorage.removeItem(`firebase:authUser:${firebaseConfig.apiKey}:[DEFAULT]`);
+      await handleLogin();
+    } catch (e) {
+      console.error('Erro ao limpar e logar:', e);
     }
   };
 
@@ -373,6 +423,23 @@ export default function App() {
                   </ol>
                 </div>
               )}
+              {loginError.includes('estado inicial') && (
+                <div className="mt-2 p-3 bg-white/50 rounded-lg border border-rose-200 text-rose-800 text-xs">
+                  <p className="font-bold mb-1">Como resolver (Erro de Estado):</p>
+                  <p className="mb-2">Este erro acontece quando o navegador bloqueia cookies de terceiros ou limpa a sessão durante o redirecionamento.</p>
+                  <ul className="list-disc ml-4 space-y-1">
+                    <li><b>No Chrome (Android):</b> Vá em Configurações &gt; Configurações do site &gt; Cookies e marque "Permitir cookies de terceiros".</li>
+                    <li><b>No APK:</b> Verifique se o navegador padrão do celular não está em modo anônimo.</li>
+                    <li>Tente o botão <b>"Limpar e Tentar Novamente"</b> abaixo.</li>
+                  </ul>
+                  <button 
+                    onClick={handleClearAndLogin}
+                    className="mt-3 w-full py-2 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg font-bold transition-colors"
+                  >
+                    Limpar e Tentar Novamente
+                  </button>
+                </div>
+              )}
               {loginError.includes('cookies de terceiros') && (
                 <div className="mt-2 p-3 bg-white/50 rounded-lg border border-rose-200 text-rose-800 text-xs">
                   <p className="font-bold mb-1">Como resolver no seu navegador:</p>
@@ -395,14 +462,60 @@ export default function App() {
             ) : (
               <Button onClick={handleLogin} className="w-full py-4 text-lg">
                 <LogIn className="w-5 h-5" />
-                Entrar (Navegador)
+                Entrar com Google (Navegador)
               </Button>
             )}
             
             <Button onClick={handleLoginRedirect} variant="outline" className="w-full py-4 text-lg">
               <LogIn className="w-5 h-5" />
-              Entrar (Modo Celular/APK)
+              Entrar com Google (Modo Celular/APK)
             </Button>
+
+            <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-blue-700 text-[10px] text-left">
+              <p className="font-bold mb-1">Aviso para APK/Android:</p>
+              <p>Se você receber o erro "missing initial state" ao usar o Google, é porque o navegador do seu celular está bloqueando cookies. Use a opção <b>"Entrar com E-mail"</b> abaixo como alternativa garantida.</p>
+            </div>
+
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-slate-500">OU</span>
+              </div>
+            </div>
+
+            {showEmailLogin ? (
+              <form onSubmit={handleEmailLogin} className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                <Input 
+                  label="E-mail" 
+                  type="email" 
+                  value={email} 
+                  onChange={setEmail} 
+                  required 
+                  placeholder="seu@email.com"
+                />
+                <Input 
+                  label="Senha" 
+                  type="password" 
+                  value={password} 
+                  onChange={setPassword} 
+                  required 
+                  placeholder="Sua senha"
+                />
+                <Button type="submit" className="w-full py-3" disabled={authLoading}>
+                  {authLoading ? 'Entrando...' : 'Entrar / Cadastrar com E-mail'}
+                </Button>
+                <Button variant="ghost" onClick={() => setShowEmailLogin(false)} className="w-full">
+                  Voltar
+                </Button>
+              </form>
+            ) : (
+              <Button onClick={() => setShowEmailLogin(true)} variant="ghost" className="w-full py-4 text-slate-600">
+                <Mail className="w-5 h-5" />
+                Entrar com E-mail (Recomendado se o Google falhar)
+              </Button>
+            )}
           </div>
         </Card>
       </div>
