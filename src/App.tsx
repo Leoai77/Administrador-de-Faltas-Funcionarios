@@ -61,6 +61,20 @@ import autoTable from 'jspdf-autotable';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
+// Pre-emptive fix for jspdf fetch error in some environments
+if (typeof window !== 'undefined') {
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(window, 'fetch');
+    if (descriptor && !descriptor.writable && !descriptor.set) {
+      // If fetch is read-only and has no setter, jspdf might crash trying to polyfill it.
+      // Modern jspdf (2.5.1+) should handle this, but we log it for debugging.
+      console.log('Fetch API detectada como somente leitura.');
+    }
+  } catch (e) {
+    // Ignore errors during descriptor check
+  }
+}
+
 import { auth, db, googleProvider, OperationType, handleFirestoreError } from './firebase';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { 
@@ -197,17 +211,25 @@ export default function App() {
 
   // Auth Effect
   useEffect(() => {
+    // Set persistence once at initialization
+    setPersistence(auth, browserLocalPersistence).catch((err) => {
+      console.error('Erro ao configurar persistência:', err);
+    });
+
     // Check for redirect result first (for mobile fallback)
     getRedirectResult(auth).then((result) => {
       if (result) {
-        console.log('Login via redirect com sucesso!');
+        console.log('Login via redirect com sucesso!', result.user.email);
       }
     }).catch((error) => {
       console.error('Erro no redirect:', error);
-      setLoginError('Erro ao retornar do login: ' + error.message);
+      if (error.code !== 'auth/configuration-not-found') {
+        setLoginError('Erro ao retornar do login: ' + error.message);
+      }
     });
 
     const unsubscribe = onAuthStateChanged(auth, (u) => {
+      console.log('Estado de autenticação alterado:', u ? u.email : 'Deslogado');
       setUser(u);
       setLoading(false);
     });
@@ -262,11 +284,10 @@ export default function App() {
   const handleLogin = async () => {
     setLoginError(null);
     try {
-      console.log('Configurando persistência local...');
-      await setPersistence(auth, browserLocalPersistence);
       console.log('Iniciando login com Google (Popup)...');
-      await signInWithPopup(auth, googleProvider);
-      console.log('Login realizado com sucesso!');
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log('Login realizado com sucesso!', result.user.email);
     } catch (error: any) {
       console.error('Erro detalhado de login:', error);
       let msg = 'Erro ao entrar com Google. ';
@@ -277,6 +298,8 @@ export default function App() {
         msg = `Este domínio (${window.location.hostname}) não está autorizado no Firebase. Adicione-o no Firebase Console > Authentication > Settings > Authorized Domains.`;
       } else if (error.code === 'auth/popup-closed-by-user') {
         msg = 'O login foi cancelado porque a janela foi fechada.';
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        msg = 'Uma solicitação de login já está em andamento.';
       } else if (error.message && error.message.includes('missing initial state')) {
         msg = 'O navegador bloqueou o login devido a configurações de privacidade. Tente usar o botão "Entrar (Modo Celular/APK)".';
       } else {
@@ -290,9 +313,8 @@ export default function App() {
   const handleLoginRedirect = async () => {
     setLoginError(null);
     try {
-      console.log('Configurando persistência local...');
-      await setPersistence(auth, browserLocalPersistence);
       console.log('Iniciando login com Google (Redirect)...');
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
       await signInWithRedirect(auth, googleProvider);
     } catch (error: any) {
       console.error('Erro detalhado de login (Redirect):', error);
@@ -365,10 +387,17 @@ export default function App() {
           )}
 
           <div className="flex flex-col gap-3">
-            <Button onClick={handleLogin} className="w-full py-4 text-lg">
-              <LogIn className="w-5 h-5" />
-              Entrar (Navegador)
-            </Button>
+            {window.self !== window.top ? (
+              <div className="mb-4 p-4 bg-amber-50 border border-amber-100 rounded-xl text-amber-700 text-sm text-left flex gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <p>Você está visualizando o app dentro de um frame (como o preview do AI Studio). O login via popup pode não funcionar. Use o <b>Modo Celular/APK</b> abaixo.</p>
+              </div>
+            ) : (
+              <Button onClick={handleLogin} className="w-full py-4 text-lg">
+                <LogIn className="w-5 h-5" />
+                Entrar (Navegador)
+              </Button>
+            )}
             
             <Button onClick={handleLoginRedirect} variant="outline" className="w-full py-4 text-lg">
               <LogIn className="w-5 h-5" />
@@ -1166,17 +1195,23 @@ function ReportsView({ employees, sites, attendance }: {
       const file = new File([blob], filename, { type: blob.type });
 
       let shared = false;
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      // Web Share API is preferred for APKs/Mobile
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           console.log('Tentando compartilhar via Web Share API...');
           await navigator.share({
             files: [file],
             title: 'Relatório Excel',
+            text: 'Relatório de Faltas e Presença'
           });
           shared = true;
           console.log('Compartilhamento concluído com sucesso.');
         } catch (shareErr: any) {
           console.warn('Erro ao compartilhar Excel (tentando download):', shareErr);
+          // If user cancelled, don't force download unless it's a real error
+          if (shareErr.name === 'AbortError') {
+            return;
+          }
         }
       }
 
@@ -1185,16 +1220,21 @@ function ReportsView({ employees, sites, attendance }: {
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.setAttribute('download', filename);
+        link.download = filename;
+        link.style.display = 'none';
         document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        console.log('Download iniciado.');
+        
+        // Small delay for some browsers
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          console.log('Download iniciado.');
+        }, 100);
       }
     } catch (err) {
       console.error('Erro ao exportar Excel:', err);
-      alert('Erro ao exportar Excel. Verifique as permissões do aplicativo.');
+      alert('Erro ao exportar Excel. Se estiver no APK, verifique se as permissões de armazenamento estão ativadas.');
     }
   };
 
@@ -1227,35 +1267,48 @@ function ReportsView({ employees, sites, attendance }: {
       const file = new File([blob], filename, { type: 'application/pdf' });
 
       let shared = false;
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           console.log('Tentando compartilhar PDF via Web Share API...');
           await navigator.share({
             files: [file],
             title: 'Relatório PDF',
+            text: 'Relatório de Faltas e Presença'
           });
           shared = true;
           console.log('Compartilhamento concluído com sucesso.');
         } catch (shareErr: any) {
           console.warn('Erro ao compartilhar PDF (tentando download):', shareErr);
+          if (shareErr.name === 'AbortError') {
+            return;
+          }
         }
       }
 
       if (!shared) {
-        console.log('Usando fallback de download direto...');
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        console.log('Download iniciado.');
+        console.log('Usando fallback de download direto (doc.save)...');
+        // For PDF, doc.save is very reliable in browsers
+        try {
+          doc.save(filename);
+          console.log('PDF salvo via doc.save()');
+        } catch (saveErr) {
+          console.error('Erro no doc.save(), tentando link manual:', saveErr);
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          setTimeout(() => {
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+          }, 100);
+        }
       }
     } catch (err) {
       console.error('Erro ao exportar PDF:', err);
-      alert('Erro ao exportar PDF. Verifique as permissões do aplicativo.');
+      alert('Erro ao exportar PDF. Se estiver no APK, verifique se as permissões de armazenamento estão ativadas.');
     }
   };
 
