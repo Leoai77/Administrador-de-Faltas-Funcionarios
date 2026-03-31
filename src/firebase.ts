@@ -8,6 +8,7 @@ if (!firebaseConfig || !firebaseConfig.projectId || firebaseConfig.projectId ===
 }
 
 const app = initializeApp(firebaseConfig);
+export { firebaseConfig };
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 

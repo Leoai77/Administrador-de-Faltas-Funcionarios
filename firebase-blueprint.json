@@ -7,9 +7,10 @@
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string", "description": "Full name of the employee" },
-        "status": { "type": "string", "enum": ["active", "away"], "description": "Current work status" }
+        "status": { "type": "string", "enum": ["active", "away"], "description": "Current work status" },
+        "admissionDate": { "type": "string", "format": "date", "description": "YYYY-MM-DD" }
       },
-      "required": ["name", "status"]
+      "required": ["name", "status", "admissionDate"]
     },
     "ConstructionSite": {
       "title": "Construction Site",

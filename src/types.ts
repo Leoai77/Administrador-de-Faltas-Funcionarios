@@ -5,6 +5,7 @@ export interface Employee {
   id: string;
   name: string;
   status: EmployeeStatus;
+  admissionDate: string; // YYYY-MM-DD
   photoBase64?: string;
 }
 
